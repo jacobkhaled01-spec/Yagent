@@ -1,0 +1,9 @@
+{
+  "mode": "all",
+  "whitelist": [],
+  "blacklist": [],
+  "ignoreGroups": true,
+  "ignoreBroadcasts": true,
+  "rateLimitWindowMinutes": 10,
+  "cooldownBetweenRepliesMs": 4000
+}

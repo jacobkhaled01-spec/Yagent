@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: whatsapp-ai-agent
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: AI_PROVIDER
+        value: huggingface
+      - key: HF_MODEL
+        value: Qwen/Qwen2.5-Coder-7B-Instruct
+      - key: TIMEZONE
+        value: Asia/Riyadh
+      - key: USER_NAME
+        value: يعقوب المهاجري

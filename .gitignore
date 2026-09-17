@@ -1,0 +1,31 @@
+# WhatsApp Auth and Session Files (CRITICAL: Do NOT commit!)
+baileys_auth_info/
+auth_info/
+session_data/
+*.session
+
+# Dependencies
+node_modules/
+package-lock.json
+
+# Environment Secrets
+.env
+.env.local
+
+# Logs and Temp Audio Files
+*.log
+*.ogg
+*.mp3
+*.wav
+temp/
+logs/
+
+# Operating System Files
+.DS_Store
+Thumbs.db
+
+# Local Conversation & Memory Data
+data/*.json
+!data/.gitkeep
+scratch/
+scratch_*.js
