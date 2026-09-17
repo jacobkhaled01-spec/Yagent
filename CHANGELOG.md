@@ -77,7 +77,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Recognizes commands like `"رد على [فلان] بـ [الرسالة]"` or `"أرسل لـ [رقم/اسم]: [الرسالة]"` and dispatches the message directly to the recipient via WhatsApp socket.
   - Recognizes automated delegation commands like `"رد على [فلان]"` without text, generating a contextual executive reply and dispatching it automatically.
   - Implemented smart contact resolution via `ExecutiveBriefingStore.findContact(query)` searching by name or international phone digits.
-  - Provides clear, helpful feedback to the owner if the contact has not sent any message yet.
+  - Added Arabic-English cross-lingual transliteration (e.g. `Mohammed AL-Hadrami` <-> `محمد الحضرمي`).
+  - Added keyboard typo tolerance (e.g. `فم بالرد على رسائل...` matching `قم بالرد على رسائل...`).
+  - Added direct contact name recognition (e.g. sending `Mohammed AL-Hadrami` displays his contact card or asks for his phone number to reply).
+  - Filtered WhatsApp story/status updates (`status@broadcast`) at the socket layer to prevent clogging the debouncer.
 - Resolved Hugging Face Error 402 (`credits depleted`) by migrating `.env` to **`Qwen/Qwen2.5-Coder-7B-Instruct`** (100% free serverless tier, zero credit consumption, verified fluent Arabic output under 2 seconds).
 - Fortified runtime resilience in `src/index.js` and `MessageDebouncer.js` with global `uncaughtException` and `unhandledRejection` guards preventing sudden termination.
+- Integrated a native lightweight HTTP health check server listening on `PORT || 3000` for 24/7 free cloud deployment.
+- Initialized and deployed the complete repository to GitHub: `https://github.com/jacobkhaled01-spec/Yagent`.
 - Expanded `tests/test_cognitive_executive.js` to test and validate outbound delegation with 100% passing results.
