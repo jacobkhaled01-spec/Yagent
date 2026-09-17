@@ -117,15 +117,26 @@ export class ExecutiveBriefingStore {
   }
 
   /**
-   * Finds a contact briefing card by name or phone
+   * Finds a contact briefing card by name or phone (Arabic & English matching)
    */
   findContact(query) {
     if (!query) return null;
-    const cleanQuery = query.toLowerCase().trim().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
+    const cleanQuery = query.toLowerCase().trim().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/-/g, ' ');
     const digitsOnly = query.replace(/\D/g, '');
 
+    const TRANSLITERATIONS = [
+      { ar: 'محمد', en: ['mohammed', 'mohamed', 'muhammad', 'mhmd'] },
+      { ar: 'حضرمي', en: ['hadrami', 'hadhrami', 'hadramy'] },
+      { ar: 'احمد', en: ['ahmed', 'ahmad'] },
+      { ar: 'خالد', en: ['khaled', 'khalid'] },
+      { ar: 'سقاف', en: ['saggaf', 'alsaggaf', 'saqqaf'] },
+      { ar: 'علي', en: ['ali'] },
+      { ar: 'عبدالله', en: ['abdullah', 'abdallah'] },
+      { ar: 'صالح', en: ['saleh', 'salih'] }
+    ];
+
     for (const card of this.entries.values()) {
-      const normName = (card.senderName || '').toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
+      const normName = (card.senderName || '').toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/-/g, ' ');
       const phoneDigits = (card.phone || '').replace(/\D/g, '');
 
       if (digitsOnly.length >= 4 && phoneDigits.includes(digitsOnly)) {
@@ -133,6 +144,17 @@ export class ExecutiveBriefingStore {
       }
       if (normName && cleanQuery && (normName.includes(cleanQuery) || cleanQuery.includes(normName))) {
         return card;
+      }
+
+      // Cross-lingual matching (e.g. Mohammed alhadrami -> محمد الحضرمي)
+      for (const t of TRANSLITERATIONS) {
+        const qHasEn = t.en.some((e) => cleanQuery.includes(e));
+        const cHasAr = normName.includes(t.ar);
+        if (qHasEn && cHasAr) return card;
+
+        const qHasAr = cleanQuery.includes(t.ar);
+        const cHasEn = t.en.some((e) => normName.includes(e));
+        if (qHasAr && cHasEn) return card;
       }
     }
     return null;

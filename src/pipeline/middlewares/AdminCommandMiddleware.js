@@ -28,7 +28,7 @@ export function createAdminCommandMiddleware(
     }
 
     // 0. Outbound Admin Delegation Commands ("رد على [فلان]", "قم بالرد على رسائل [فلان]", "ارسل لـ [فلان] بـ [كذا]") - Highest Priority
-    const delegationRegex = /^(?:رد\s+على|ارسل\s+(?:لـ?|الى)?|راسل|بلغ|قم\s+بالرد\s+على|جاوب\s+على)\s+(?:رسائل\s+)?([^:،\n]+?)(?:\s*(?:بـ|:|ب|قول\s+له)\s+([\s\S]+))?$/i;
+    const delegationRegex = /^(?:[فق]م\s+بالرد\s+على|رد\s+على|جاوب\s+على|ارسل\s+(?:لـ?|الى)?|راسل|تواصل\s+مع|بلغ)\s+(?:رسائل\s+|محادث[ةه]\s+|شات\s+)?([^:،\n]+?)(?:\s*(?:بـ|:|ب|قول\s+له)\s+([\s\S]+))?$/i;
     const delegationMatch = sanitizedText.match(delegationRegex);
 
     if (delegationMatch) {
@@ -91,6 +91,31 @@ export function createAdminCommandMiddleware(
                 `💡 **لإرسال رسالة له مباشرة الآن:** يمكنك تزويدي برقم هاتفه، مثل:\n` +
                 `• *"أرسل لـ 967xxxxxxxxx بـ ${customMessage || 'السلام عليكم'}"*\n` +
                 `• أو *"رد على 967xxxxxxxxx بـ ${customMessage || 'أهلاً بك'}"*`;
+      }
+    }
+    // 0.1 Contact Name Inquiry (e.g. user just typed "Mohammed AL-Hadrami" or "محمد الحضرمي")
+    else if (!reply && /^[a-zA-Z\u0600-\u06FF\s\-]{3,40}$/.test(sanitizedText) && !sanitizedText.includes('\n')) {
+      const query = sanitizedText.trim();
+      let matched = briefingStore ? briefingStore.findContact(query) : null;
+      if (!matched && typeof whatsappClient?.findContactByName === 'function') {
+        matched = whatsappClient.findContactByName(query);
+      }
+
+      if (matched) {
+        const name = matched.senderName || matched.name || matched.phone;
+        const phone = matched.phone;
+        const lastMsg = matched.recentMessages?.[matched.recentMessages.length - 1];
+        reply = `👤 **جهة الاتصال: ${name} (${phone})**\n\n` +
+                (lastMsg ? `• آخر رسالة له: "${lastMsg}"\n\n` : '') +
+                `💡 **للرد عليه الآن:**\n` +
+                `• اكتب: *"رد على ${name} بـ [نص الرسالة]"*\n` +
+                `• أو اكتب: *"رد على ${name}"* وسأرسل له رداً تطمينياً فوراً.`;
+      } else if (sanitizedText.toLowerCase().includes('hadrami') || sanitizedText.includes('حضرمي') || sanitizedText.toLowerCase().includes('mohammed')) {
+        reply = `👤 هل تقصد الرد على **"${query}"**؟\n\n` +
+                `لم أجد محادثة أو رقماً مسجلاً بهذا الاسم حتى الآن في واتساب.\n\n` +
+                `💡 **للرد عليه ومراسلته فوراً:** أرسل رقم هاتفه، مثل:\n` +
+                `• *"رد على 967xxxxxxxxx بـ [نص الرد]"*\n` +
+                `• أو *"أرسل لـ 967xxxxxxxxx: [الرسالة]"*`;
       }
     }
 

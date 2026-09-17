@@ -129,8 +129,13 @@ export class BaileysWhatsAppClient extends IWhatsAppClient {
         const remoteJid = msg.key?.remoteJid;
         if (!remoteJid) continue;
 
+        // Skip WhatsApp Status broadcasts completely
+        if (remoteJid === 'status@broadcast' || remoteJid.endsWith('@broadcast')) {
+          continue;
+        }
+
         const isGroup = remoteJid.endsWith('@g.us');
-        const isBroadcast = remoteJid.endsWith('@broadcast') || remoteJid === 'status@broadcast';
+        const isBroadcast = false;
 
         // Check if message is in the user's self chat (Message Yourself)
         const isSelfChat = Boolean(
@@ -242,16 +247,37 @@ export class BaileysWhatsAppClient extends IWhatsAppClient {
 
   findContactByName(query) {
     if (!query) return null;
-    const cleanQuery = query.toLowerCase().trim().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
+    const cleanQuery = query.toLowerCase().trim().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/-/g, ' ');
     const digitsOnly = query.replace(/\D/g, '');
 
+    const TRANSLITERATIONS = [
+      { ar: 'محمد', en: ['mohammed', 'mohamed', 'muhammad', 'mhmd'] },
+      { ar: 'حضرمي', en: ['hadrami', 'hadhrami', 'hadramy'] },
+      { ar: 'احمد', en: ['ahmed', 'ahmad'] },
+      { ar: 'خالد', en: ['khaled', 'khalid'] },
+      { ar: 'سقاف', en: ['saggaf', 'alsaggaf', 'saqqaf'] },
+      { ar: 'علي', en: ['ali'] },
+      { ar: 'عبدالله', en: ['abdullah', 'abdallah'] },
+      { ar: 'صالح', en: ['saleh', 'salih'] }
+    ];
+
     for (const c of this.contacts.values()) {
-      const normName = (c.name || '').toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
+      const normName = (c.name || '').toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/-/g, ' ');
       if (digitsOnly.length >= 4 && c.phone.includes(digitsOnly)) {
         return c;
       }
       if (normName && cleanQuery && (normName.includes(cleanQuery) || cleanQuery.includes(normName))) {
         return c;
+      }
+
+      for (const t of TRANSLITERATIONS) {
+        const qHasEn = t.en.some((e) => cleanQuery.includes(e));
+        const cHasAr = normName.includes(t.ar);
+        if (qHasEn && cHasAr) return c;
+
+        const qHasAr = cleanQuery.includes(t.ar);
+        const cHasEn = t.en.some((e) => normName.includes(e));
+        if (qHasAr && cHasEn) return c;
       }
     }
     return null;
