@@ -85,4 +85,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Fortified runtime resilience in `src/index.js` and `MessageDebouncer.js` with global `uncaughtException` and `unhandledRejection` guards preventing sudden termination.
 - Integrated a native lightweight HTTP health check server listening on `PORT || 3000` for 24/7 free cloud deployment.
 - Initialized and deployed the complete repository to GitHub: `https://github.com/jacobkhaled01-spec/Yagent`.
+- **Self-Chat Infinite Loop Fix (حل مشكلة التكرار في محادثة المالك):**
+  - Added strict anti-echo text cache preventing the bot from replying to its own outgoing messages in self-chat.
+  - Dropped all empty synchronization / receipt / reaction packets (`text === ""`) before triggering pipeline processing.
+  - Guarded `AdminCommandMiddleware` to never dispatch replies for empty text or spam fallback menus.
 - Expanded `tests/test_cognitive_executive.js` to test and validate outbound delegation with 100% passing results.
