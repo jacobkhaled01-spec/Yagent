@@ -25,6 +25,7 @@ async function runDryRunTests() {
   // TEST 1: Temporal Schedule Resolution (Sleep, Work, Study)
   // ----------------------------------------------------
   console.log('▶️ TEST 1: Temporal Schedule Context Tests...');
+  scheduler.clearCustomStatus();
 
   // Simulate Night Time (02:00 AM)
   const nightDate = new Date('2026-09-18T02:00:00');

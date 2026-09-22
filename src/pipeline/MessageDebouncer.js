@@ -76,6 +76,16 @@ export class MessageDebounceManager {
     }, waitDelay);
   }
 
+  cancel(senderJid) {
+    if (!senderJid) return;
+    const entry = this.buffers.get(senderJid);
+    if (entry) {
+      if (entry.timer) clearTimeout(entry.timer);
+      this.buffers.delete(senderJid);
+      console.log(`[MessageDebounceManager] ⏹️ Cancelled pending debounce batch for ${senderJid}`);
+    }
+  }
+
   clear() {
     for (const entry of this.buffers.values()) {
       if (entry.timer) clearTimeout(entry.timer);

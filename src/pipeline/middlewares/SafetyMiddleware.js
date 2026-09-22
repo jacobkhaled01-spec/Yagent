@@ -1,8 +1,9 @@
 /**
  * Safety & Filtering Middleware
- * Guards against banned contacts, groups, and unwanted broadcast spam
+ * Guards against banned contacts, groups, unwanted broadcast spam,
+ * and active Human Owner Takeover (anti-interference).
  */
-export function createSafetyMiddleware(whitelistConfig) {
+export function createSafetyMiddleware(whitelistConfig, humanTakeoverManager = null) {
   return async (context, next) => {
     // Owner messaging themselves always bypasses all filters
     if (context.isSelfAdmin) {
@@ -11,6 +12,14 @@ export function createSafetyMiddleware(whitelistConfig) {
     }
 
     const { senderJid, isGroup, isBroadcast } = context;
+
+    // Human Takeover Anti-Interference: Suppress auto-reply if owner is chatting manually
+    if (humanTakeoverManager && humanTakeoverManager.isTakeoverActive(senderJid)) {
+      console.log(`[SafetyMiddleware] 🛑 Auto-reply suppressed for ${senderJid} (Active manual chat by owner).`);
+      context.stopped = true;
+      context.stopReason = 'Ignored: Owner is actively chatting with contact';
+      return;
+    }
 
     // Ignore group chats if configured
     if (isGroup && whitelistConfig.ignoreGroups) {

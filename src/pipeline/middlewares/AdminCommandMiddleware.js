@@ -8,7 +8,8 @@ export function createAdminCommandMiddleware(
   auditHistory = [],
   llmProvider = null,
   personaConfig = {},
-  briefingStore = null
+  briefingStore = null,
+  humanTakeoverManager = null
 ) {
   return async (context, next) => {
     // Only process if it is a self message from the owner to themselves
@@ -168,6 +169,46 @@ export function createAdminCommandMiddleware(
                 `• *"أنا في المستشفى مرافق مع الوالد"*\n` +
                 `• *"عندي اختبار اليوم"*\n` +
                 `• *"مسافر صنعاء حتى الأحد"*`;
+      }
+    }
+    // 1.2.1 Active Human Conversations Query (e.g. "من اكلم", "محادثات نشطة")
+    else if (
+      normalized.includes('من اكلم') ||
+      normalized.includes('محادثات نشطه') ||
+      normalized.includes('محادثاتي')
+    ) {
+      if (humanTakeoverManager) {
+        const active = humanTakeoverManager.getActiveTakeovers();
+        if (active.length > 0) {
+          reply = `👤 **المحادثات التي تتحدث معها شخصياً حالياً يا ${personaConfig.ownerName || 'يعقوب'}:**\n\n` +
+                  active.map((item, idx) => `${idx + 1}. **[+${item.jid.split('@')[0]}]** (المساعد صامت ولن يتدخل لمدة ${item.remainingMinutes} دقيقة أخرى)`).join('\n') +
+                  `\n\n💡 المساعد يتوقف تلقائياً عن التدخل في أي محادثة تتولى الرد عليها بنفسك.`;
+        } else {
+          reply = `✅ لا توجد محادثات نشطة حالياً تتحدث معها يدوياً. المساعد جاهز لمتابعة وتغطية أي رسائل واردة.`;
+        }
+      }
+    }
+    // 1.2.2 Resume Auto-Reply for specific contact (e.g. "استئناف الرد على فلان", "فعل الرد لـ فلان")
+    else if (
+      /^(?:استئناف|تفعيل|شغل|فعل)\s+(?:الرد\s+)?(?:لـ?|على)?\s*(.+)$/i.test(sanitizedText) &&
+      !sanitizedText.includes('نوم') &&
+      !sanitizedText.includes('عمل') &&
+      !sanitizedText.includes('مذاكر')
+    ) {
+      const targetQuery = sanitizedText.replace(/^(?:استئناف|تفعيل|شغل|فعل)\s+(?:الرد\s+)?(?:لـ?|على)?\s*/i, '').trim();
+      let targetJid = null;
+      let matched = briefingStore ? briefingStore.findContact(targetQuery) : null;
+      if (matched) targetJid = matched.senderJid;
+      else if (typeof whatsappClient?.findContactByName === 'function') {
+        const c = whatsappClient.findContactByName(targetQuery);
+        if (c) targetJid = c.jid;
+      }
+      if (!targetJid && targetQuery.replace(/\D/g, '').length >= 7) {
+        targetJid = `${targetQuery.replace(/\D/g, '')}@s.whatsapp.net`;
+      }
+      if (targetJid && humanTakeoverManager) {
+        humanTakeoverManager.releaseTakeover(targetJid);
+        reply = `✅ تم استئناف الرد التلقائي للمساعد الذكي على **${targetQuery}** بنجاح.`;
       }
     }
     // 1.3 Dynamic Custom Status Trigger (e.g. "انا في المستشفى", "عندي اختبار", "مسافر صنعاء", "مشغول بالورشة", "في اجتماع")

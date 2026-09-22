@@ -9,6 +9,7 @@ import { Pipeline } from './pipeline/Pipeline.js';
 import { MessageDebounceManager } from './pipeline/MessageDebouncer.js';
 import { ConversationMemoryStore } from './domain/memory/ConversationMemoryStore.js';
 import { ExecutiveBriefingStore } from './domain/memory/ExecutiveBriefingStore.js';
+import { HumanTakeoverManager } from './domain/safety/HumanTakeoverManager.js';
 
 // Middlewares
 import { createSafetyMiddleware } from './pipeline/middlewares/SafetyMiddleware.js';
@@ -108,14 +109,15 @@ export async function bootstrap(customOverrides = {}) {
     console.warn(`\n⚠️ [ESCALATION ALERT] Message from ${item.senderJid} flagged: "${item.text}" (Reason: ${item.reason})\n`);
   };
 
-  // 7. Initialize Cognitive Memory & Briefing Stores
+  // 7. Initialize Cognitive Memory, Briefing Stores, and Human Takeover Manager
   const conversationMemory = customOverrides.conversationMemory || new ConversationMemoryStore();
   const executiveBriefing = customOverrides.executiveBriefing || new ExecutiveBriefingStore();
+  const humanTakeover = customOverrides.humanTakeover || new HumanTakeoverManager();
 
   // 8. Assemble Middleware Pipeline
   const pipeline = new Pipeline([
-    createSafetyMiddleware(whitelistConfig),
-    createAdminCommandMiddleware(scheduler, whatsappClient, escalationHistory, llmProvider, personaConfig, executiveBriefing),
+    createSafetyMiddleware(whitelistConfig, humanTakeover),
+    createAdminCommandMiddleware(scheduler, whatsappClient, escalationHistory, llmProvider, personaConfig, executiveBriefing, humanTakeover),
     createContextMemoryMiddleware(conversationMemory, executiveBriefing),
     createScheduleMiddleware(scheduler),
     createLLMGenerationMiddleware(llmProvider, personaConfig),
@@ -136,6 +138,17 @@ export async function bootstrap(customOverrides = {}) {
       console.error(`[index] Error processing pipeline for ${batch.senderJid}:`, err.message);
     }
   });
+
+  // Wire Human Takeover, Debouncer, and Memory to WhatsApp Client
+  if (typeof whatsappClient.setHumanTakeoverManager === 'function') {
+    whatsappClient.setHumanTakeoverManager(humanTakeover);
+  }
+  if (typeof whatsappClient.setMessageDebouncer === 'function') {
+    whatsappClient.setMessageDebouncer(debouncer);
+  }
+  if (typeof whatsappClient.setConversationMemoryStore === 'function') {
+    whatsappClient.setConversationMemoryStore(conversationMemory);
+  }
 
   // 10. Wire Inbound Event Listener
   whatsappClient.onMessageReceived((inboundMsg) => {

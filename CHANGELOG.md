@@ -107,3 +107,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added support for `[CUSTOM_STATUS: ...]` tags in `interpretAdminCommand`.
 - **Automated Verification (`tests/test_dynamic_status.js`)**:
   - Added and executed automated test suite validating status activation, external contact auto-reply generation, status query, and status clearance with 100% passing score.
+
+### Human Agent Takeover & Anti-Interference Protocol (بروتوكول الإيقاف التلقائي للبوت عند رد المالك بنفسه)
+- **HumanTakeoverManager Entity (`src/domain/safety/HumanTakeoverManager.js`)**:
+  - Built an in-memory session tracker recording timestamps of manual replies sent by the owner from their phone.
+  - Implemented configurable auto-reply suppression cooldown (default: 30 minutes, renewed automatically with each new message sent by the owner).
+  - Added `recordOwnerReply(jid)`, `isTakeoverActive(jid)`, `releaseTakeover(jid)`, and `getActiveTakeovers()`.
+- **Baileys Outbound Interception (`src/adapters/whatsapp/BaileysWhatsAppClient.js`)**:
+  - Detects outbound messages dispatched from the owner's phone (`msg.key.fromMe && !isSelfChat`).
+  - Differentiates bot-dispatched messages from human messages via `sentMessageIds` and message ID prefixes.
+  - Automatically signals `HumanTakeoverManager` upon manual owner message, cancels active debounce timers in `MessageDebounceManager` for that contact, and records the owner's message in conversational history.
+- **Safety Middleware Suppression (`src/pipeline/middlewares/SafetyMiddleware.js`)**:
+  - Injected `HumanTakeoverManager` into `SafetyMiddleware`, dropping incoming messages from contacts undergoing active manual human conversation with the owner.
+- **Self-Chat Management Commands (`src/pipeline/middlewares/AdminCommandMiddleware.js`)**:
+  - Added query command (`من اكلم`, `محادثات نشطة`) displaying list of contacts currently in human takeover mode and remaining cooldown time.
+  - Added explicit resumption command (`استئناف الرد على [فلان]`, `فعل الرد لـ [فلان]`) to re-enable auto-replies immediately.
+- **Automated Verification (`tests/test_human_takeover.js`)**:
+  - Validated initial state, owner reply takeover trigger, debounce cancellation, auto-reply suppression during contact reply, self-chat status queries, and auto-reply resumption with 100% passing score.
