@@ -214,7 +214,7 @@ export class BaileysWhatsAppClient extends IWhatsAppClient {
             this.messageDebouncer.cancel(remoteJid);
           }
           if (this.conversationMemoryStore && cleanText) {
-            this.conversationMemoryStore.recordTurn(remoteJid, 'assistant', cleanText);
+            this.conversationMemoryStore.addMessage(remoteJid, 'assistant', cleanText);
           }
           continue;
         }

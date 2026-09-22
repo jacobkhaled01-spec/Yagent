@@ -69,6 +69,13 @@ export class ConversationMemoryStore {
   }
 
   /**
+   * Alias for addMessage
+   */
+  recordTurn(senderJid, role, text) {
+    return this.addMessage(senderJid, role, text);
+  }
+
+  /**
    * Get the dialogue history for a contact
    */
   getHistory(senderJid) {
