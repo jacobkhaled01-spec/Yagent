@@ -1,11 +1,75 @@
+import fs from 'fs';
+import path from 'path';
+
 /**
  * TemporalScheduler
  * Resolves current user status, temporal mode, and emergency conditions
  */
 export class TemporalScheduler {
-  constructor(scheduleConfig) {
+  constructor(scheduleConfig, storagePath = null) {
     this.config = scheduleConfig;
     this.manualModeOverride = null;
+    this.storageFile = storagePath || path.resolve('data', 'custom_status.json');
+    this.customStatus = { active: false, text: '', setAt: null };
+    this.loadCustomStatus();
+  }
+
+  loadCustomStatus() {
+    try {
+      if (fs.existsSync(this.storageFile)) {
+        const raw = fs.readFileSync(this.storageFile, 'utf8');
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object' && parsed.text) {
+          this.customStatus = {
+            active: Boolean(parsed.active),
+            text: parsed.text,
+            setAt: parsed.setAt || new Date().toISOString()
+          };
+        }
+      }
+    } catch (err) {
+      console.warn('[TemporalScheduler] Warning loading custom status:', err.message);
+    }
+  }
+
+  saveCustomStatus() {
+    try {
+      const dir = path.dirname(this.storageFile);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(this.storageFile, JSON.stringify(this.customStatus, null, 2), 'utf8');
+    } catch (err) {
+      console.warn('[TemporalScheduler] Warning saving custom status:', err.message);
+    }
+  }
+
+  setCustomStatus(text) {
+    const cleanText = (text || '').trim();
+    if (!cleanText) return;
+    this.customStatus = {
+      active: true,
+      text: cleanText,
+      setAt: new Date().toISOString()
+    };
+    this.manualModeOverride = 'custom';
+    this.saveCustomStatus();
+  }
+
+  clearCustomStatus() {
+    this.customStatus = {
+      active: false,
+      text: '',
+      setAt: null
+    };
+    if (this.manualModeOverride === 'custom') {
+      this.manualModeOverride = null;
+    }
+    this.saveCustomStatus();
+  }
+
+  getCustomStatus() {
+    return this.customStatus;
   }
 
   /**
@@ -17,6 +81,20 @@ export class TemporalScheduler {
   resolveScheduleContext(incomingMessageText = '', currentTime = new Date()) {
     const isEmergency = this.checkEmergency(incomingMessageText);
     const timezone = this.config.timezone || 'Asia/Riyadh';
+
+    // Check dynamic custom status override (highest priority)
+    if (this.customStatus && this.customStatus.active && this.customStatus.text) {
+      return {
+        modeKey: 'custom',
+        name: `حالة خاصة (${this.customStatus.text})`,
+        tone: 'مهذب جداً، معتذر بلطف، ومطمئن وراقٍ',
+        instruction: `المستخدم أبلغ عن ظرفه وحالته الحالية: [${this.customStatus.text}]. وضح للمتصل هذا الظرف باعتذار راقٍ ولطيف لعدم القدرة على الرد المباشر الآن، وطمئنه بأنك استلمت رسالته وسيقوم المستخدم بالرد عليه شخصياً فور تفرغه.`,
+        customStatusText: this.customStatus.text,
+        isEmergency,
+        maxRepliesPerContact: 3,
+        allowEmergencyOverride: true
+      };
+    }
 
     // Check manual override from user command
     if (this.manualModeOverride && this.config.modes?.[this.manualModeOverride]) {

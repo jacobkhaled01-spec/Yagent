@@ -62,6 +62,7 @@ graph TD
 | `STORE_MEMORY` | Entity | Active | [ConversationMemoryStore.js](file:///d:/Projects/agents/src/domain/memory/ConversationMemoryStore.js) | Multi-turn ring buffer conversational memory per contact |
 | `STORE_BRIEFING` | Entity | Active | [ExecutiveBriefingStore.js](file:///d:/Projects/agents/src/domain/memory/ExecutiveBriefingStore.js) | Structured executive digest & briefing cards generator |
 | `MW_ADMIN_DELEGATION`| Middleware | Active & Verified | [AdminCommandMiddleware.js](file:///d:/Projects/agents/src/pipeline/middlewares/AdminCommandMiddleware.js) | Self-chat commands, reports, and outbound contact delegation ("رد على فلان") |
+| `SCHED_DYNAMIC_STATUS`| Core Feature | Active & Verified | [TemporalScheduler.js](file:///d:/Projects/agents/src/scheduler/TemporalScheduler.js) | Dynamic user custom status with JSON persistence and contact reply tailoring |
 | `HF_MODEL_FREE` | Adapter Config | Active & Verified | [.env](file:///d:/Projects/agents/.env) | `Qwen/Qwen2.5-Coder-7B-Instruct` on Hugging Face (100% free serverless tier) |
 | `FLUTTER_APP` | Companion UI | Planned (Phase 3) | `d:/Projects/agents/mobile_app/` | Mobile dashboard, voice controller, daily reports |
 | `CORE_CODEBASE` | Implementation | Active & Verified | [src/index.js](file:///d:/Projects/agents/src/index.js) | Full Clean Architecture, Pipeline & Adapters |

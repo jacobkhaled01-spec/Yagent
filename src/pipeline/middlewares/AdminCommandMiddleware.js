@@ -124,7 +124,147 @@ export function createAdminCommandMiddleware(
       }
     }
 
-    // 1. If not delegation, try LLM Command Interpretation
+    // 1. High-Precision Arabic Intent Engine (Instant 0ms, Zero Hallucination)
+    const normalized = sanitizedText
+      .replace(/[أإآ]/g, 'ا')
+      .replace(/ة/g, 'ه')
+      .replace(/ى/g, 'ي')
+      .toLowerCase();
+
+    // 1.1 Return to Normal / Available / Cancel Custom Status Request
+    if (
+      normalized.includes('تلقائي') ||
+      normalized.includes('متاح') ||
+      normalized.includes('صحيت') ||
+      normalized.includes('فضيت') ||
+      normalized.includes('فاضي') ||
+      normalized.includes('خلصت') ||
+      normalized.includes('الغاء') ||
+      normalized.includes('إلغاء') ||
+      normalized === 'طبيعي'
+    ) {
+      scheduler.clearCustomStatus();
+      scheduler.manualModeOverride = null;
+      reply = `✅ تم إلغاء الحالة الخاصة والوضع اليدوي، والعودة للوضع التلقائي المعتاد يا ${personaConfig.ownerName || 'يعقوب'}.\nسأخبر أي شخص يراسلك بأنك متاح الآن.`;
+    }
+    // 1.2 Status Query (e.g. "ايش وضعي", "ما هي حالتي", "حالتي الان")
+    else if (
+      normalized === 'حالتي' ||
+      normalized === 'وضعي' ||
+      normalized.includes('ايش وضعي') ||
+      normalized.includes('ما هي حالتي') ||
+      normalized.includes('شو حالتي')
+    ) {
+      const currentStatus = typeof scheduler.getCustomStatus === 'function' ? scheduler.getCustomStatus() : null;
+      const currentContext = scheduler.resolveScheduleContext();
+      if (currentStatus && currentStatus.active && currentStatus.text) {
+        reply = `📌 **حالتك المعتمدة حالياً يا ${personaConfig.ownerName || 'يعقوب'}:**\n` +
+                `"${currentStatus.text}"\n\n` +
+                `• يتم الرد على أي متصل باعتذار لطيف يوضح هذا الظرف وطمأنته بأنك ستتواصل معه شخصياً فور فراغك.\n` +
+                `💡 للعودة للوضع التلقائي، أرسل: *"متاح"* أو *"تلقائي"*.`;
+      } else {
+        reply = `✅ أنت حالياً في الوضع التلقائي المعتاد: **[${currentContext.name}]**.\n\n` +
+                `💡 لتحديد أي حالة جديدة في أي وقت، فقط أرسل لي مثلاً:\n` +
+                `• *"أنا في المستشفى مرافق مع الوالد"*\n` +
+                `• *"عندي اختبار اليوم"*\n` +
+                `• *"مسافر صنعاء حتى الأحد"*`;
+      }
+    }
+    // 1.3 Dynamic Custom Status Trigger (e.g. "انا في المستشفى", "عندي اختبار", "مسافر صنعاء", "مشغول بالورشة", "في اجتماع")
+    else if (
+      /^(?:انا|أنا|عندي|حالتي|وضعي|حاليا|حالياً|في|مسافر|مشغول)(?:\s+|:|$)/i.test(sanitizedText) &&
+      !sanitizedText.includes('تقرير') &&
+      !sanitizedText.includes('ملخص') &&
+      !sanitizedText.includes('رسائل')
+    ) {
+      let statusToSet = sanitizedText
+        .replace(/^(?:انا|أنا|حالتي|وضعي|حاليا|حالياً)\s*(?::|بـ)?\s*/i, '')
+        .trim();
+
+      if (!statusToSet) statusToSet = sanitizedText;
+
+      scheduler.setCustomStatus(statusToSet);
+
+      reply = `📌 **تم اعتماد حالتك بنجاح يا ${personaConfig.ownerName || 'يعقوب'}**:\n` +
+              `"${statusToSet}"\n\n` +
+              `✅ **طريقة الرد على أي شخص يراسلك:**\n` +
+              `سأتولى الرد على أي شخص يتواصل معك باعتذار لطيف ومحترم يوضح أنك (${statusToSet})، وسأطمئنه بأنني استلمت رسالته وسأطلعك عليها لترد عليه شخصياً فور فراغك إن شاء الله.\n\n` +
+              `💡 *(للإلغاء والعودة للوضع التلقائي في أي وقت، أرسل: "متاح" أو "تلقائي")*`;
+    }
+    // 1.4 Executive Briefing & Report Request
+    else if (
+      normalized.includes('تقرير') ||
+      normalized.includes('جديد') ||
+      normalized.includes('رسائل') ||
+      normalized.includes('ملخص') ||
+      normalized.includes('اخبار') ||
+      normalized.includes('راسلني') ||
+      normalized.includes('كلمني')
+    ) {
+      if (briefingStore) {
+        reply = briefingStore.generateExecutiveDigest(personaConfig.ownerName || 'يعقوب المهاجري');
+      } else {
+        const currentContext = scheduler.resolveScheduleContext();
+        const totalEscalations = auditHistory.length;
+        reply = `📋 **تقرير المساعد الذكي يا ${personaConfig.ownerName || 'يعقوب'}**:\n\n` +
+                `• **الوضع الحالي:** ${currentContext.name} (${currentContext.tone})\n` +
+                `• **الحالات العاجلة المسجلة:** ${totalEscalations} حالة.\n`;
+
+        if (totalEscalations > 0) {
+          reply += `\n⚠️ **أحدث الحالات العاجلة:**\n` +
+            auditHistory.slice(-3).map((item, idx) => `${idx + 1}. من [${item.senderJid.split('@')[0]}]: "${item.text}"`).join('\n');
+        } else {
+          reply += `• لم يتم تسجيل أي حالات طارئة حتى الآن وكل شيء هادئ ومستقر.`;
+        }
+      }
+    }
+    // 1.5 Sleep Mode Request
+    else if (
+      normalized.includes('نوم') ||
+      normalized.includes('انام') ||
+      normalized.includes('نايم') ||
+      normalized.includes('تعبان') ||
+      normalized.includes('نعسان')
+    ) {
+      scheduler.manualModeOverride = 'sleep';
+      reply = '🌙 تم تفعيل **وضع النوم** بنجاح.\nسأتولى الرد الهادئ على رسائلك وإشعار المتصلين بأنك نائم وسأطلب منهم ترك تفاصيلهم للصباح، ولن أزعجك إلا للضرورة القصوى.';
+    }
+    // 1.6 Work & Busy Mode Request
+    else if (
+      normalized.includes('عمل') ||
+      normalized.includes('اعمال') ||
+      normalized.includes('شغل') ||
+      normalized.includes('دوام') ||
+      normalized.includes('اجتماع')
+    ) {
+      scheduler.manualModeOverride = 'work';
+      reply = '💼 تم تفعيل **وضع العمل والانشغال** بنجاح.\nسأتولى الرد المهني والاعتذار عن المكالمات بلطف وتسجيل أي رسائل مهمة للرجوع إليها لاحقاً.';
+    }
+    // 1.7 Study Mode Request
+    else if (
+      normalized.includes('مذاكره') ||
+      normalized.includes('دراسه') ||
+      normalized.includes('بذاكر') ||
+      normalized.includes('اختبار') ||
+      normalized.includes('امتحان')
+    ) {
+      scheduler.manualModeOverride = 'study';
+      reply = '📚 تم تفعيل **وضع المذاكرة والتركيز** بنجاح.\nسأخبر المتصلين بلطف بأنك في جلسة دراسة وتركيز وستتواصل معهم فور الانتهاء.';
+    }
+    // 1.8 Capability & Chat Visibility Clarification
+    else if (
+      normalized.includes('تري') ||
+      normalized.includes('تشوف') ||
+      normalized.includes('شايف') ||
+      (normalized.includes('جميع') && normalized.includes('محادثات'))
+    ) {
+      reply = `👁️ **توضيح بخصوص متابعة المحادثات يا ${personaConfig.ownerName || 'يعقوب'}:**\n\n` +
+              `• أنا أتابع وأستقبل جميع الرسائل والمحادثات التي تصل **منذ لحظة اتصالي وتشغيلي الحالي** وأسجلها في الذاكرة الحية.\n` +
+              `• لا أقوم بتحميل أرشيف المحادثات القديمة السابقة من هاتفك لحماية حسابك من الحظر وتوفير الذاكرة والسرعة.\n` +
+              `• كل رسالة جديدة تصلك أثناء عملي أقوم بالرد عليها بلباقة وتوثيقها لك في التقرير التنفيذي فوراً!`;
+    }
+
+    // 2. If not captured by high-precision intents, invoke LLM Command Interpretation
     if (!reply && llmProvider && typeof llmProvider.interpretAdminCommand === 'function') {
       try {
         const result = await llmProvider.interpretAdminCommand({
@@ -135,9 +275,12 @@ export function createAdminCommandMiddleware(
           briefingDigest: briefingStore ? briefingStore.generateExecutiveDigest(personaConfig.ownerName) : ''
         });
 
-        if (result.setMode) {
+        if (result.customStatus) {
+          scheduler.setCustomStatus(result.customStatus);
+        } else if (result.setMode) {
           scheduler.manualModeOverride = result.setMode;
         } else if (result.setMode === null) {
+          scheduler.clearCustomStatus();
           scheduler.manualModeOverride = null;
         }
 
@@ -149,98 +292,9 @@ export function createAdminCommandMiddleware(
       }
     }
 
-    // 2. Fallback: High-Precision Arabic Intent Engine
+    // 3. Fallback: Greetings & Command Menu
     if (!reply) {
-      const normalized = sanitizedText
-        .replace(/[أإآ]/g, 'ا')
-        .replace(/ة/g, 'ه')
-        .replace(/ى/g, 'ي')
-        .toLowerCase();
-
-      // 1. Executive Briefing & Report Request
       if (
-        normalized.includes('تقرير') ||
-        normalized.includes('جديد') ||
-        normalized.includes('رسائل') ||
-        normalized.includes('ملخص') ||
-        normalized.includes('اخبار') ||
-        normalized.includes('راسلني') ||
-        normalized.includes('كلمني')
-      ) {
-        if (briefingStore) {
-          reply = briefingStore.generateExecutiveDigest(personaConfig.ownerName || 'يعقوب المهاجري');
-        } else {
-          const currentContext = scheduler.resolveScheduleContext();
-          const totalEscalations = auditHistory.length;
-          reply = `📋 **تقرير المساعد الذكي يا ${personaConfig.ownerName || 'يعقوب'}**:\n\n` +
-                  `• **الوضع الحالي:** ${currentContext.name} (${currentContext.tone})\n` +
-                  `• **الحالات العاجلة المسجلة:** ${totalEscalations} حالة.\n`;
-
-          if (totalEscalations > 0) {
-            reply += `\n⚠️ **أحدث الحالات العاجلة:**\n` +
-              auditHistory.slice(-3).map((item, idx) => `${idx + 1}. من [${item.senderJid.split('@')[0]}]: "${item.text}"`).join('\n');
-          } else {
-            reply += `• لم يتم تسجيل أي حالات طارئة حتى الآن وكل شيء هادئ ومستقر.`;
-          }
-        }
-      }
-      // 2. Sleep Mode Request
-      else if (
-        normalized.includes('نوم') ||
-        normalized.includes('انام') ||
-        normalized.includes('نايم') ||
-        normalized.includes('تعبان') ||
-        normalized.includes('نعسان')
-      ) {
-        scheduler.manualModeOverride = 'sleep';
-        reply = '🌙 تم تفعيل **وضع النوم** بنجاح.\nسأتولى الرد الهادئ على رسائلك وإشعار المتصلين بأنك نائم وسأطلب منهم ترك تفاصيلهم للصباح، ولن أزعجك إلا للضرورة القصوى.';
-      }
-      // 3. Work & Busy Mode Request
-      else if (
-        normalized.includes('عمل') ||
-        normalized.includes('اعمال') ||
-        normalized.includes('مشغول') ||
-        normalized.includes('شغل') ||
-        normalized.includes('دوام') ||
-        normalized.includes('اجتماع')
-      ) {
-        scheduler.manualModeOverride = 'work';
-        reply = '💼 تم تفعيل **وضع العمل والانشغال** بنجاح.\nسأتولى الرد المهني والاعتذار عن المكالمات بلطف وتسجيل أي رسائل مهمة للرجوع إليها لاحقاً.';
-      }
-      // 4. Study Mode Request
-      else if (
-        normalized.includes('مذاكره') ||
-        normalized.includes('دراسه') ||
-        normalized.includes('بذاكر') ||
-        normalized.includes('اختبار') ||
-        normalized.includes('امتحان')
-      ) {
-        scheduler.manualModeOverride = 'study';
-        reply = '📚 تم تفعيل **وضع المذاكرة والتركيز** بنجاح.\nسأخبر المتصلين بلطف بأنك في جلسة دراسة وتركيز وستتواصل معهم فور الانتهاء.';
-      }
-      // 5. Normal / Available / Woke Up Request
-      else if (
-        normalized.includes('تلقائي') ||
-        normalized.includes('متاح') ||
-        normalized.includes('صحيت') ||
-        normalized.includes('فضيت') ||
-        normalized.includes('خلصت')
-      ) {
-        scheduler.manualModeOverride = null;
-        reply = '✅ تم إلغاء الوضع اليدوي والعودة للوضع الزمني التلقائي المعتاد.';
-      }
-      // 6. Capability & Chat Visibility Clarification
-      else if (
-        normalized.includes('تري') ||
-        normalized.includes('تشوف') ||
-        normalized.includes('شايف') ||
-        (normalized.includes('جميع') && normalized.includes('محادثات'))
-      ) {
-        reply = `👁️ **توضيح بخصوص متابعة المحادثات يا ${personaConfig.ownerName || 'يعقوب'}:**\n\n` +
-                `• أنا أتابع وأستقبل جميع الرسائل والمحادثات التي تصل **منذ لحظة اتصالي وتشغيلي الحالي** وأسجلها في الذاكرة الحية.\n` +
-                `• لا أقوم بتحميل أرشيف المحادثات القديمة السابقة من هاتفك لحماية حسابك من الحظر وتوفير الذاكرة والسرعة.\n` +
-                `• كل رسالة جديدة تصلك أثناء عملي أقوم بالرد عليها بلباقة وتوثيقها لك في التقرير التنفيذي فوراً!`;
-      } else if (
         normalized.includes('مرحبا') ||
         normalized.includes('سلام') ||
         normalized.includes('اهل') ||
@@ -252,10 +306,11 @@ export function createAdminCommandMiddleware(
         reply = `👋 أهلاً بك يا ${personaConfig.ownerName || 'سيدي'}! المساعد الذكي متصل وجاهز 🚀.\n\n` +
                 `يمكنك إرسال:\n` +
                 `• *"التقرير"* أو *"مالجديد"* - لعرض ملخص الرسائل.\n` +
-                `• *"أنا مشغول"* أو *"أنا نائم"* - لتبديل وضع الرد.\n` +
+                `• *"أنا في المستشفى"* أو *"مسافر"* - لتحديد أي حالة مخصصة.\n` +
+                `• *"متاح"* - للعودة للوضع الطبيعي.\n` +
                 `• *"رد على [فلان] بـ [كذا]"* - للرد على أي متصل.`;
       } else {
-        reply = `فهمت طلبك يا ${personaConfig.ownerName || 'سيدي'}. اكتب *"التقرير"* لمعرفة المستجدات أو *"مساعده"* لعرض الأوامر.`;
+        reply = `فهمت طلبك يا ${personaConfig.ownerName || 'سيدي'}. أرسل حالتك (مثلاً: *"أنا في المستشفى"*)، أو اكتب *"التقرير"* لمعرفة المستجدات.`;
       }
     }
 

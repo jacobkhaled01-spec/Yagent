@@ -90,3 +90,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Dropped all empty synchronization / receipt / reaction packets (`text === ""`) before triggering pipeline processing.
   - Guarded `AdminCommandMiddleware` to never dispatch replies for empty text or spam fallback menus.
 - Expanded `tests/test_cognitive_executive.js` to test and validate outbound delegation with 100% passing results.
+
+### Dynamic Custom Status & Contextual Auto-Responder (نظام الحالة المخصصة الديناميكية والرد التلقائي)
+- **TemporalScheduler Dynamic Status Enhancement (`src/scheduler/TemporalScheduler.js`)**:
+  - Implemented dynamic custom status state (`customStatus: { active, text, setAt }`) with local JSON persistence in `data/custom_status.json`.
+  - Implemented `setCustomStatus(text)`, `clearCustomStatus()`, `loadCustomStatus()`, and `getCustomStatus()`.
+  - Prioritized active custom statuses at the highest evaluation tier in `resolveScheduleContext()` ensuring any custom situation overrides default schedules.
+- **Self-Chat Intent Engine Expansion (`src/pipeline/middlewares/AdminCommandMiddleware.js`)**:
+  - Integrated deterministic Arabic regex detection for any custom condition (`انا في المستشفى`, `عندي اختبار`, `مسافر صنعاء`, `مشغول بالورشة`, `في اجتماع إلى العصر`, etc.).
+  - Added real-time status inquiry command (`ايش وضعي`, `ما هي حالتي`, `حالتي الان`).
+  - Added instantaneous cancellation commands (`متاح`, `تلقائي`, `فاضي`, `خلصت`, `طبيعي`, `إلغاء`).
+  - Prioritized deterministic intent matching ahead of LLM interpretations to eliminate latency and hallucination.
+- **Provider & Prompt Synchronization (`HuggingFaceProvider.js`, `FreeSmartAIProvider.js`)**:
+  - Injected `customStatusText` into LLM generation prompts instructing models to convey Yaaqob's exact condition with polite reassurance.
+  - Reinforced assistant identity constraints preventing the AI from falsely speaking as Yaaqob directly.
+  - Added support for `[CUSTOM_STATUS: ...]` tags in `interpretAdminCommand`.
+- **Automated Verification (`tests/test_dynamic_status.js`)**:
+  - Added and executed automated test suite validating status activation, external contact auto-reply generation, status query, and status clearance with 100% passing score.
